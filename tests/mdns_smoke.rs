@@ -9,7 +9,7 @@ fn pick_port() -> u16 {
     l.local_addr().unwrap().port()
 }
 
-fn spawn_node(name: &str, port: u16) -> std::process::Child {
+fn spawn_node(_name: &str, port: u16) -> std::process::Child {
     Command::cargo_bin("nix-p2p-cache")
         .unwrap()
         .env("RUST_LOG", "info,nix_p2p_cache::p2p=debug,libp2p_mdns=info")
@@ -19,8 +19,6 @@ fn spawn_node(name: &str, port: u16) -> std::process::Child {
             &port.to_string(),
             "--bind",
             "127.0.0.1",
-            "--hostname",
-            name,
             "--db",
             "/nonexistent.sqlite",
             "--store-dir",

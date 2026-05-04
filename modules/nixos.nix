@@ -9,8 +9,6 @@ let cfg = config.services.nix-p2p-cache; in
       allowedUDPPorts = [ cfg.port ];
     };
 
-    systemd.tmpfiles.rules = [ "d ${cfg.keyDir} 0750 nix-p2p-cache nix-p2p-cache -" ];
-
     users.groups.nix-p2p-cache = { };
     users.users.nix-p2p-cache = {
       isSystemUser = true;
@@ -23,11 +21,8 @@ let cfg = config.services.nix-p2p-cache; in
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
-      preStart = ''
-        ${cfg.package}/bin/nix-p2p-cache keygen --hostname ${lib.escapeShellArg cfg.hostName} --out ${cfg.keyDir}
-      '';
       serviceConfig = {
-        ExecStart = "${cfg.package}/bin/nix-p2p-cache run --port ${toString cfg.port} --bind ${cfg.bind} --hostname ${lib.escapeShellArg cfg.hostName}";
+        ExecStart = "${cfg.package}/bin/nix-p2p-cache run --port ${toString cfg.port} --bind ${cfg.bind}";
         User = "nix-p2p-cache";
         Group = "nix-p2p-cache";
         Restart = "on-failure";

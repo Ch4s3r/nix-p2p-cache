@@ -30,8 +30,6 @@ enum Cmd {
         port: u16,
         #[arg(long, default_value = "::")]
         bind: String,
-        #[arg(long)]
-        hostname: Option<String>,
         #[arg(long, default_value = store::DEFAULT_DB_PATH)]
         db: PathBuf,
         #[arg(long, default_value = narinfo::STORE_DIR)]
@@ -39,17 +37,10 @@ enum Cmd {
     },
     Keygen {
         #[arg(long)]
-        hostname: Option<String>,
-        #[arg(long)]
         out: PathBuf,
     },
-    DerivePubkey {
-        #[arg(long)]
-        hostname: String,
-    },
+    DerivePubkey,
     Setup {
-        #[arg(long)]
-        hostname: Option<String>,
         #[arg(long, default_value = "5555")]
         port: u16,
     },
@@ -67,53 +58,31 @@ async fn main() -> Result<()> {
         Cmd::Run {
             port,
             bind,
-            hostname,
             db,
             store_dir,
-        } => run(port, bind, hostname, db, store_dir).await,
-        Cmd::Keygen { hostname, out } => {
-            let host = match hostname {
-                Some(h) => h,
-                None => keys::detect_hostname()?,
-            };
-            keys::validate_hostname(&host)?;
-            let (sec, pubp) = keys::write_key_files(&out, &host)?;
+        } => run(port, bind, db, store_dir).await,
+        Cmd::Keygen { out } => {
+            let (sec, pubp) = keys::write_key_files(&out)?;
             println!("wrote {} and {}", sec.display(), pubp.display());
             Ok(())
         }
-        Cmd::DerivePubkey { hostname } => {
-            keys::validate_hostname(&hostname)?;
-            println!("{}", keys::public_key_line(&hostname));
+        Cmd::DerivePubkey => {
+            println!("{}", keys::public_key_line());
             Ok(())
         }
-        Cmd::Setup { hostname, port } => {
-            let host = match hostname {
-                Some(h) => h,
-                None => keys::detect_hostname()?,
-            };
-            keys::validate_hostname(&host)?;
+        Cmd::Setup { port } => {
             println!(
                 "# Add to /etc/nix/nix.conf:\nsubstituters = http://127.0.0.1:{port} https://cache.nixos.org\ntrusted-public-keys = {} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
-                keys::public_key_line(&host)
+                keys::public_key_line()
             );
             Ok(())
         }
     }
 }
 
-async fn run(
-    port: u16,
-    bind: String,
-    hostname: Option<String>,
-    db: PathBuf,
-    store_dir: PathBuf,
-) -> Result<()> {
-    let host = match hostname {
-        Some(h) => h,
-        None => keys::detect_hostname()?,
-    };
-    tracing::info!(hostname = %host, "starting nix-p2p-cache");
-    let key = Arc::new(keys::LocalKey::from_hostname(&host));
+async fn run(port: u16, bind: String, db: PathBuf, store_dir: PathBuf) -> Result<()> {
+    tracing::info!("starting nix-p2p-cache");
+    let key = Arc::new(keys::LocalKey::shared());
     let store = Arc::new(store::LocalStore::new(db, store_dir));
     let (p2p_handle, p2p_fut) = p2p::start(store.clone(), port);
     let state = http::AppState {

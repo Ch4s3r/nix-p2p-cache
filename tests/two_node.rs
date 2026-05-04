@@ -75,7 +75,7 @@ fn make_node(root: &Path, hash_part: Option<&str>) -> NodeFixture {
     }
 }
 
-fn spawn(name: &str, port: u16, db: &Path, store: &Path) -> Child {
+fn spawn(_name: &str, port: u16, db: &Path, store: &Path) -> Child {
     Command::cargo_bin("nix-p2p-cache")
         .unwrap()
         .env("RUST_LOG", "info,nix_p2p_cache=debug")
@@ -85,8 +85,6 @@ fn spawn(name: &str, port: u16, db: &Path, store: &Path) -> Child {
             &port.to_string(),
             "--bind",
             "127.0.0.1",
-            "--hostname",
-            name,
             "--db",
         ])
         .arg(db)
@@ -186,7 +184,7 @@ fn node_b_fetches_narinfo_from_node_a_over_libp2p() {
         )),
         "narinfo body missing StorePath: {narinfo_body}"
     );
-    assert!(narinfo_body.contains("Sig: nix-p2p-cache-two-node-b:"));
+    assert!(narinfo_body.contains("Sig: nix-p2p-cache-shared:"));
     assert_eq!(
         nar_status, 200,
         "B never fetched NAR bytes from A (last status {nar_status})"
@@ -204,11 +202,8 @@ fn node_b_fetches_narinfo_from_node_a_over_libp2p() {
     );
 }
 
-fn derive_pubkey(hostname: &str) -> VerifyingKey {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"nix-p2p-cache.v1|");
-    hasher.update(hostname.as_bytes());
-    let seed: [u8; 32] = hasher.finalize().into();
+fn shared_pubkey() -> VerifyingKey {
+    let seed: [u8; 32] = blake3::hash(b"nix-p2p-cache.shared.v1").into();
     ed25519_dalek::SigningKey::from_bytes(&seed).verifying_key()
 }
 
@@ -237,8 +232,7 @@ fn local_hit_returns_signed_narinfo_with_valid_signature() {
     let dir_a = tempfile::tempdir().unwrap();
     let node_a = make_node(dir_a.path(), Some(hash_part));
     let port = pick_port();
-    let host = "siglocal";
-    let mut child = spawn(host, port, &node_a.db, &node_a.store);
+    let mut child = spawn("siglocal", port, &node_a.db, &node_a.store);
     let ready = wait_http(port);
     let body = if ready {
         reqwest::blocking::get(format!("http://127.0.0.1:{port}/{hash_part}.narinfo"))
@@ -263,14 +257,14 @@ fn local_hit_returns_signed_narinfo_with_valid_signature() {
     let fields = parse_narinfo(&body);
     let sig_line = fields["Sig"];
     let (name, b64) = sig_line.split_once(':').unwrap();
-    assert_eq!(name, format!("nix-p2p-cache-{host}"));
+    assert_eq!(name, "nix-p2p-cache-shared");
     let sig_bytes = data_encoding::BASE64.decode(b64.as_bytes()).unwrap();
     let sig = Signature::from_slice(&sig_bytes).unwrap();
-    let pubkey = derive_pubkey(host);
+    let pubkey = shared_pubkey();
     let fp = fingerprint(&fields);
     pubkey
         .verify(fp.as_bytes(), &sig)
-        .expect("signature must verify against derived pubkey for local hit");
+        .expect("signature must verify against shared pubkey for local hit");
     let expected_path = format!("{}/{hash_part}-test", node_a.store.display());
     assert_eq!(fields["StorePath"], expected_path);
     assert_eq!(fields["URL"], format!("nar/{hash_part}.nar"));

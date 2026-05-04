@@ -2,10 +2,9 @@ flake: { config, lib, pkgs, ... }:
 let
   cfg = config.services.nix-p2p-cache;
   defaultPkg = flake.packages.${pkgs.stdenv.hostPlatform.system}.default;
-  hostName = cfg.hostName;
-  pubKeyDrv = pkgs.runCommand "nix-p2p-cache-pubkey-${hostName}" { } ''
-    ${cfg.package}/bin/nix-p2p-cache derive-pubkey --hostname ${lib.escapeShellArg hostName} > $out
-  '';
+  # Shared pubkey baked in. Must match keys::public_key_line() in src/keys.rs
+  # (derived from blake3("nix-p2p-cache.shared.v1")). Update both together.
+  sharedPublicKey = "nix-p2p-cache-shared:zfv4gOrH/QCQjKhPybhUvhgzM5vj/2zq/F3iplvDbxE=";
 in
 {
   options.services.nix-p2p-cache = {
@@ -23,16 +22,6 @@ in
       type = lib.types.port;
       default = 5555;
       description = "TCP port for HTTP and UDP port for libp2p QUIC.";
-    };
-    hostName = lib.mkOption {
-      type = lib.types.str;
-      default = config.networking.hostName;
-      description = "Hostname used to derive the deterministic signing key.";
-    };
-    keyDir = lib.mkOption {
-      type = lib.types.path;
-      default = "/var/lib/nix-p2p-cache";
-      description = "Where to materialize the derived keypair.";
     };
     bind = lib.mkOption {
       type = lib.types.str;
@@ -57,7 +46,6 @@ in
     nix.settings.substituters =
       [ "http://127.0.0.1:${toString cfg.port}" ] ++ cfg.extraSubstituters;
     nix.settings.trusted-public-keys =
-      [ (lib.removeSuffix "\n" (builtins.readFile pubKeyDrv)) ]
-      ++ cfg.extraTrustedPublicKeys;
+      [ sharedPublicKey ] ++ cfg.extraTrustedPublicKeys;
   };
 }

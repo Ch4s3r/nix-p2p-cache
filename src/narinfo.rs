@@ -101,14 +101,14 @@ mod tests {
 
     #[test]
     fn narinfo_signing_roundtrip_matches_nix_format() {
-        let key = LocalKey::from_hostname("testhost");
+        let key = LocalKey::shared();
         let mut info = sample();
         info.sign_with(&key);
         let fp = info.fingerprint();
         assert!(fp.starts_with("1;/nix/store/"));
         let sig = info.sig.as_deref().unwrap();
         let (name, b64) = sig.split_once(':').unwrap();
-        assert_eq!(name, "nix-p2p-cache-testhost");
+        assert_eq!(name, crate::keys::KEY_NAME);
         let sig_bytes = data_encoding::BASE64.decode(b64.as_bytes()).unwrap();
         let sig = ed25519_dalek::Signature::from_slice(&sig_bytes).unwrap();
         ed25519_dalek::Verifier::verify(&key.signing.verifying_key(), fp.as_bytes(), &sig).unwrap();

@@ -51,7 +51,7 @@ Both bind dual-stack (IPv4 + IPv6) on the same port number. Driven concurrently 
 }
 ```
 
-`darwin-rebuild switch`, done. Importing the module enables the service by default — it installs a `launchd` daemon, derives a deterministic ed25519 signing key from `networking.hostName`, and wires `http://127.0.0.1:5555` + the derived public key into `nix.conf`. To opt out, set `services.nix-p2p-cache.enable = false;`.
+`darwin-rebuild switch`, done. Importing the module enables the service by default — it installs a `launchd` daemon and wires `http://127.0.0.1:5555` + a fixed shared public key into `nix.conf`. No per-host key generation, no IFD. To opt out, set `services.nix-p2p-cache.enable = false;`.
 
 ### NixOS
 
@@ -67,7 +67,6 @@ Installs a `systemd` service running as a dedicated `nix-p2p-cache` user, with `
 
 ```sh
 cargo build --release
-./target/release/nix-p2p-cache keygen --hostname $(hostname) --out ~/.config/nix-p2p-cache
 ./target/release/nix-p2p-cache run --port 5555 --bind ::
 ```
 
@@ -75,10 +74,10 @@ Then in `/etc/nix/nix.conf`:
 
 ```
 substituters = http://127.0.0.1:5555 https://cache.nixos.org
-trusted-public-keys = nix-p2p-cache-<your-host>:<base64> cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+trusted-public-keys = nix-p2p-cache-shared:zfv4gOrH/QCQjKhPybhUvhgzM5vj/2zq/F3iplvDbxE= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
 ```
 
-Use `nix-p2p-cache derive-pubkey --hostname <h>` to print the public key line for any host.
+`nix-p2p-cache derive-pubkey` prints the public key line. It's the same on every host — the keypair is deterministically derived from a constant in the source.
 
 ## How a fetch flows
 
@@ -91,10 +90,10 @@ Use `nix-p2p-cache derive-pubkey --hostname <h>` to print the public key line fo
 ## CLI
 
 ```
-nix-p2p-cache run            --port 5555 --bind :: --hostname $(hostname)
-nix-p2p-cache keygen         --hostname <h> --out <dir>     # write key + key.pub
-nix-p2p-cache derive-pubkey  --hostname <h>                 # print trusted-public-keys line
-nix-p2p-cache setup          --hostname <h>                 # print nix.conf snippet
+nix-p2p-cache run            --port 5555 --bind ::
+nix-p2p-cache keygen         --out <dir>     # write key + key.pub
+nix-p2p-cache derive-pubkey                  # print the shared trusted-public-keys line
+nix-p2p-cache setup                          # print nix.conf snippet
 ```
 
 ## Module options
@@ -104,8 +103,6 @@ nix-p2p-cache setup          --hostname <h>                 # print nix.conf sni
 | `services.nix-p2p-cache.enable` | `true` | Set to `false` to opt out. Enabled automatically when the module is imported. |
 | `services.nix-p2p-cache.port` | `5555` | TCP (HTTP) and UDP (QUIC) port. |
 | `services.nix-p2p-cache.bind` | `"::"` | HTTP bind address. |
-| `services.nix-p2p-cache.hostName` | `config.networking.hostName` | Used to derive the deterministic signing key. |
-| `services.nix-p2p-cache.keyDir` | `/var/lib/nix-p2p-cache` | Where the materialized keypair lives. |
 | `services.nix-p2p-cache.openFirewall` | `true` | Open the port (NixOS only). |
 | `services.nix-p2p-cache.extraSubstituters` | `[ cache.nixos.org ]` | Additional upstream substituters. |
 | `services.nix-p2p-cache.extraTrustedPublicKeys` | `[ cache.nixos.org-1 ]` | Additional trusted public keys. |
@@ -113,18 +110,19 @@ nix-p2p-cache setup          --hostname <h>                 # print nix.conf sni
 
 ## Trust model
 
-LAN-trusted. The signing key is derived deterministically from the hostname:
+LAN-trusted. The shim signs narinfo with a fixed shared keypair derived deterministically from a constant in the source:
 
 ```
-seed   = blake3("nix-p2p-cache.v1|" ++ hostname)
+seed   = blake3("nix-p2p-cache.shared.v1")
 key    = ed25519 from seed
+pubkey = nix-p2p-cache-shared:zfv4gOrH/QCQjKhPybhUvhgzM5vj/2zq/F3iplvDbxE=
 ```
 
-This lets the nix module compute the public key at evaluation time (via IFD on `nix-p2p-cache derive-pubkey`) and inject it into `trusted-public-keys` without a chicken-and-egg first-rebuild dance.
+**Why this is OK in practice:** NARs are always re-signed locally on `127.0.0.1` before nix sees them. The trust boundary is the loopback shim, not the peers. The libp2p layer authenticates peers separately via its own noise keypair.
 
-The trade-off: anyone on the LAN claiming your hostname can mint signatures matching your trusted-key entry. This is fine because NARs are always re-signed locally on `127.0.0.1` before nix sees them — the trust boundary is the loopback shim, not the peers. The libp2p layer authenticates peers separately via its own noise keypair.
+**The trade-off:** anyone with the binary holds the private half. Because nix's `trusted-public-keys` is global across all substituters, an attacker who can MITM your HTTPS connection to `cache.nixos.org` (e.g., compromised CA, hostile Wi-Fi, DNS hijack) could in theory feed nix a malicious narinfo signed with the shared key. Mitigations: use HTTPS pinning where possible, drop `cache.nixos.org` from `extraSubstituters` if you only want LAN content, and don't run this on hostile networks.
 
-**Do not expose the libp2p port to the internet.** This is a LAN tool. There is no rate limiting, no auth, and any peer can ask any node for any path in its store.
+**Do not expose the libp2p port to the internet.** This is a LAN tool. No rate limiting, no auth — any peer can ask any node for any path in its store.
 
 ## Verify it actually works
 
