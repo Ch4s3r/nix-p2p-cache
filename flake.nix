@@ -23,9 +23,6 @@
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
           nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
-            pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-          ];
           doCheck = false;
         };
     in
