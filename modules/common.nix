@@ -9,7 +9,11 @@ let
 in
 {
   options.services.nix-p2p-cache = {
-    enable = lib.mkEnableOption "nix-p2p-cache LAN substituter";
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to enable the nix-p2p-cache LAN substituter. Importing the module enables it by default; set to false to opt out.";
+    };
     package = lib.mkOption {
       type = lib.types.package;
       default = defaultPkg;

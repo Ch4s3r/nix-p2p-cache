@@ -45,21 +45,19 @@ Both bind dual-stack (IPv4 + IPv6) on the same port number. Driven concurrently 
     darwinConfigurations."mybox" = nix-darwin.lib.darwinSystem {
       modules = [
         nix-p2p-cache.darwinModules.default
-        { services.nix-p2p-cache.enable = true; }
       ];
     };
   };
 }
 ```
 
-`darwin-rebuild switch`, done. The module installs a `launchd` daemon, derives a deterministic ed25519 signing key from `networking.hostName`, and wires `http://127.0.0.1:5555` + the derived public key into `nix.conf`.
+`darwin-rebuild switch`, done. Importing the module enables the service by default — it installs a `launchd` daemon, derives a deterministic ed25519 signing key from `networking.hostName`, and wires `http://127.0.0.1:5555` + the derived public key into `nix.conf`. To opt out, set `services.nix-p2p-cache.enable = false;`.
 
 ### NixOS
 
 ```nix
 {
   imports = [ nix-p2p-cache.nixosModules.default ];
-  services.nix-p2p-cache.enable = true;
 }
 ```
 
@@ -103,7 +101,7 @@ nix-p2p-cache setup          --hostname <h>                 # print nix.conf sni
 
 | Option | Default | Meaning |
 |---|---|---|
-| `services.nix-p2p-cache.enable` | `false` | Turn the service on. |
+| `services.nix-p2p-cache.enable` | `true` | Set to `false` to opt out. Enabled automatically when the module is imported. |
 | `services.nix-p2p-cache.port` | `5555` | TCP (HTTP) and UDP (QUIC) port. |
 | `services.nix-p2p-cache.bind` | `"::"` | HTTP bind address. |
 | `services.nix-p2p-cache.hostName` | `config.networking.hostName` | Used to derive the deterministic signing key. |
