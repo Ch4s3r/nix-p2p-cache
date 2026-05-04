@@ -11,7 +11,7 @@ Inspired by [`cid-chan/peerix`](https://github.com/cid-chan/peerix); rewritten i
 ## What it does
 
 ```
-┌─────────┐   http://127.0.0.1:5555    ┌──────────────┐    libp2p QUIC + mDNS    ┌──────────────┐
+┌─────────┐   http://127.0.0.1:5555    ┌──────────────┐    libp2p QUIC + mDNS     ┌──────────────┐
 │   nix   │ ─────────────────────────► │ nix-p2p-cache│◄─────────────────────────►│ nix-p2p-cache│
 │ (build) │   /nix-cache-info          │  (this host) │      LAN peers            │ (other host) │
 └─────────┘   /<hash>.narinfo          └──────┬───────┘                           └──────────────┘
