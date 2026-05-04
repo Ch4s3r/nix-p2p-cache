@@ -1,5 +1,7 @@
 # nix-p2p-cache
 
+> ⚠️ **Experimental.** Not end-to-end tested yet on real two-host LAN setups. Use at your own risk.
+
 > Peer-to-peer LAN substituter for `/nix/store`. Stop hammering `cache.nixos.org` when the machine next to you already built the path.
 
 A single Rust daemon you run on every nix machine on your LAN. Each node auto-discovers its peers via mDNS and shares its read-only `/nix/store` over libp2p. Configure once via the included nix-darwin / NixOS modules — no per-peer key management, no manual substituter registration as machines come and go.
