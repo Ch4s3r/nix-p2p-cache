@@ -10,7 +10,8 @@ fn pick_port() -> u16 {
 fn wait_ready(port: u16) -> bool {
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
-        if let Ok(resp) = reqwest::blocking::get(format!("http://127.0.0.1:{port}/nix-cache-info")) {
+        if let Ok(resp) = reqwest::blocking::get(format!("http://127.0.0.1:{port}/nix-cache-info"))
+        {
             if resp.status().is_success() {
                 return true;
             }

@@ -13,7 +13,11 @@ use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
-#[command(name = "nix-p2p-cache", version, about = "P2P LAN substituter for /nix/store")]
+#[command(
+    name = "nix-p2p-cache",
+    version,
+    about = "P2P LAN substituter for /nix/store"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -54,7 +58,9 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .init();
     let cli = Cli::parse();
     match cli.cmd {
@@ -72,11 +78,7 @@ async fn main() -> Result<()> {
             };
             keys::validate_hostname(&host)?;
             let (sec, pubp) = keys::write_key_files(&out, &host)?;
-            println!(
-                "wrote {} and {}",
-                sec.display(),
-                pubp.display()
-            );
+            println!("wrote {} and {}", sec.display(), pubp.display());
             Ok(())
         }
         Cmd::DerivePubkey { hostname } => {

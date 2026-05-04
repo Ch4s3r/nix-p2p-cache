@@ -51,7 +51,14 @@ impl LocalStore {
         let mut stmt = conn.prepare(
             "SELECT id, path, hash, narSize, deriver, ca FROM ValidPaths WHERE path LIKE ?1 ESCAPE '\\' LIMIT 1",
         )?;
-        let row: Option<(i64, String, Option<String>, Option<i64>, Option<String>, Option<String>)> = stmt
+        let row: Option<(
+            i64,
+            String,
+            Option<String>,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+        )> = stmt
             .query_row([&pattern], |r| {
                 Ok((
                     r.get::<_, i64>(0)?,
@@ -113,8 +120,7 @@ impl LocalStore {
 
     pub fn open_nar_stream(&self, store_path: &str) -> Result<nix_nar::Encoder> {
         let owned = store_path.to_string();
-        nix_nar::Encoder::new(owned)
-            .map_err(|e| anyhow::anyhow!("nix-nar encoder: {e}"))
+        nix_nar::Encoder::new(owned).map_err(|e| anyhow::anyhow!("nix-nar encoder: {e}"))
     }
 }
 

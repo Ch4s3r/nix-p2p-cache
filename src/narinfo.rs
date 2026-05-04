@@ -92,9 +92,7 @@ mod tests {
             file_size: 42,
             nar_hash: "sha256:00000000000000000000000000000000000000000000000000".into(),
             nar_size: 42,
-            references: vec![
-                "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-bar".into(),
-            ],
+            references: vec!["/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-bar".into()],
             deriver: None,
             ca: None,
             sig: None,
@@ -123,5 +121,4 @@ mod tests {
         assert!(rendered.contains("References: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-bar\n"));
         assert!(rendered.contains("StorePath: /nix/store/"));
     }
-
 }

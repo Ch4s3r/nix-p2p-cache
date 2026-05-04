@@ -3,12 +3,12 @@ use crate::narinfo::STORE_DIR;
 use crate::p2p::P2pHandle;
 use crate::store::{LocalStore, normalize_nar_hash_pub};
 use anyhow::Result;
+use axum::Router;
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -41,10 +41,7 @@ async fn nix_cache_info() -> impl IntoResponse {
     )
 }
 
-async fn get_narinfo(
-    State(state): State<AppState>,
-    Path(file): Path<String>,
-) -> Response {
+async fn get_narinfo(State(state): State<AppState>, Path(file): Path<String>) -> Response {
     let Some(hash_part) = file.strip_suffix(".narinfo") else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -89,7 +86,9 @@ async fn get_narinfo(
                 headers.insert(header::CONTENT_TYPE, "text/x-nix-narinfo".parse().unwrap());
                 headers.insert(
                     "X-Nix-P2p-Peer",
-                    peer.to_string().parse().unwrap_or_else(|_| "unknown".parse().unwrap()),
+                    peer.to_string()
+                        .parse()
+                        .unwrap_or_else(|_| "unknown".parse().unwrap()),
                 );
                 (StatusCode::OK, headers, info.render()).into_response()
             } else {
@@ -103,10 +102,7 @@ async fn get_narinfo(
     }
 }
 
-async fn get_nar(
-    State(state): State<AppState>,
-    Path(file): Path<String>,
-) -> Response {
+async fn get_nar(State(state): State<AppState>, Path(file): Path<String>) -> Response {
     let hash_part = file.strip_suffix(".nar").unwrap_or(&file).to_string();
     let local = state.store.clone();
     let h = hash_part.clone();

@@ -122,21 +122,15 @@ struct PendingNar {
     reply: Option<oneshot::Sender<Option<Vec<u8>>>>,
 }
 
-async fn run(
-    store: Arc<LocalStore>,
-    mut rx: mpsc::Receiver<Command>,
-    port: u16,
-) -> Result<()> {
+async fn run(store: Arc<LocalStore>, mut rx: mpsc::Receiver<Command>, port: u16) -> Result<()> {
     let mut swarm = libp2p::SwarmBuilder::with_new_identity()
         .with_tokio()
         .with_quic()
         .with_behaviour(|key| {
-            let mdns = mdns::tokio::Behaviour::new(
-                mdns::Config::default(),
-                key.public().to_peer_id(),
-            )?;
-            let rr_cfg = request_response::Config::default()
-                .with_request_timeout(Duration::from_secs(120));
+            let mdns =
+                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
+            let rr_cfg =
+                request_response::Config::default().with_request_timeout(Duration::from_secs(120));
             let codec = CborCodec::<PeerRequest, PeerResponse>::default()
                 .set_request_size_maximum(1024 * 1024)
                 .set_response_size_maximum(MAX_MESSAGE_BYTES as u64);
@@ -290,20 +284,21 @@ async fn handle_incoming(
         }
         PeerRequest::GetNar { hash_part } => {
             let store = store.clone();
-            let r: Result<Option<Vec<u8>>, anyhow::Error> = tokio::task::spawn_blocking(move || {
-                let Some(row) = store.lookup_by_hash(&hash_part)? else {
-                    return Ok::<Option<Vec<u8>>, anyhow::Error>(None);
-                };
-                let mut enc = store.open_nar_stream(&row.path)?;
-                let mut buf = Vec::with_capacity(row.nar_size as usize);
-                std::io::copy(&mut enc, &mut buf)?;
-                if buf.len() > MAX_MESSAGE_BYTES {
-                    anyhow::bail!("NAR larger than max message size");
-                }
-                Ok(Some(buf))
-            })
-            .await
-            .unwrap_or_else(|e| Err(anyhow::anyhow!("join: {e}")));
+            let r: Result<Option<Vec<u8>>, anyhow::Error> =
+                tokio::task::spawn_blocking(move || {
+                    let Some(row) = store.lookup_by_hash(&hash_part)? else {
+                        return Ok::<Option<Vec<u8>>, anyhow::Error>(None);
+                    };
+                    let mut enc = store.open_nar_stream(&row.path)?;
+                    let mut buf = Vec::with_capacity(row.nar_size as usize);
+                    std::io::copy(&mut enc, &mut buf)?;
+                    if buf.len() > MAX_MESSAGE_BYTES {
+                        anyhow::bail!("NAR larger than max message size");
+                    }
+                    Ok(Some(buf))
+                })
+                .await
+                .unwrap_or_else(|e| Err(anyhow::anyhow!("join: {e}")));
             match r {
                 Ok(b) => PeerResponse::Nar(b),
                 Err(e) => PeerResponse::Error(e.to_string()),
@@ -312,4 +307,3 @@ async fn handle_incoming(
     };
     let _ = swarm.behaviour_mut().rr.send_response(channel, response);
 }
-

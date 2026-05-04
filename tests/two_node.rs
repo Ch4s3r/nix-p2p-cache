@@ -68,7 +68,11 @@ fn make_node(root: &Path, hash_part: Option<&str>) -> NodeFixture {
     } else {
         None
     };
-    NodeFixture { store, db, nar_bytes }
+    NodeFixture {
+        store,
+        db,
+        nar_bytes,
+    }
 }
 
 fn spawn(name: &str, port: u16, db: &Path, store: &Path) -> Child {
@@ -130,9 +134,7 @@ fn node_b_fetches_narinfo_from_node_a_over_libp2p() {
     if ready {
         let deadline = Instant::now() + Duration::from_secs(25);
         while Instant::now() < deadline {
-            match reqwest::blocking::get(format!(
-                "http://127.0.0.1:{port_b}/{hash_part}.narinfo"
-            )) {
+            match reqwest::blocking::get(format!("http://127.0.0.1:{port_b}/{hash_part}.narinfo")) {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
                     if status == 200 {
@@ -153,9 +155,7 @@ fn node_b_fetches_narinfo_from_node_a_over_libp2p() {
     if narinfo_status == 200 {
         let deadline = Instant::now() + Duration::from_secs(20);
         while Instant::now() < deadline {
-            match reqwest::blocking::get(format!(
-                "http://127.0.0.1:{port_b}/nar/{hash_part}.nar"
-            )) {
+            match reqwest::blocking::get(format!("http://127.0.0.1:{port_b}/nar/{hash_part}.nar")) {
                 Ok(resp) => {
                     nar_status = resp.status().as_u16();
                     if nar_status == 200 {
@@ -198,7 +198,10 @@ fn node_b_fetches_narinfo_from_node_a_over_libp2p() {
         nar_bytes.len(),
         expected_nar.len()
     );
-    assert_eq!(nar_bytes, expected_nar, "NAR bytes returned by B differ from A's source NAR");
+    assert_eq!(
+        nar_bytes, expected_nar,
+        "NAR bytes returned by B differ from A's source NAR"
+    );
 }
 
 fn derive_pubkey(hostname: &str) -> VerifyingKey {
@@ -210,9 +213,7 @@ fn derive_pubkey(hostname: &str) -> VerifyingKey {
 }
 
 fn parse_narinfo(body: &str) -> std::collections::HashMap<&str, &str> {
-    body.lines()
-        .filter_map(|l| l.split_once(": "))
-        .collect()
+    body.lines().filter_map(|l| l.split_once(": ")).collect()
 }
 
 fn fingerprint(fields: &std::collections::HashMap<&str, &str>) -> String {
@@ -242,7 +243,13 @@ fn local_hit_returns_signed_narinfo_with_valid_signature() {
     let body = if ready {
         reqwest::blocking::get(format!("http://127.0.0.1:{port}/{hash_part}.narinfo"))
             .ok()
-            .and_then(|r| if r.status().is_success() { r.text().ok() } else { None })
+            .and_then(|r| {
+                if r.status().is_success() {
+                    r.text().ok()
+                } else {
+                    None
+                }
+            })
             .unwrap_or_default()
     } else {
         String::new()
@@ -284,8 +291,14 @@ fn references_are_emitted_in_lexicographic_order_in_narinfo() {
             |r| r.get(0),
         )
         .unwrap();
-    let p_y = format!("{}/yyyy0123456789012345678901234567-y", node.store.display());
-    let p_a = format!("{}/aaaa0123456789012345678901234567-a", node.store.display());
+    let p_y = format!(
+        "{}/yyyy0123456789012345678901234567-y",
+        node.store.display()
+    );
+    let p_a = format!(
+        "{}/aaaa0123456789012345678901234567-a",
+        node.store.display()
+    );
     for p in [&p_y, &p_a] {
         std::fs::create_dir_all(p).unwrap();
         conn.execute(
@@ -295,10 +308,14 @@ fn references_are_emitted_in_lexicographic_order_in_narinfo() {
         .unwrap();
     }
     let id_y: i64 = conn
-        .query_row("SELECT id FROM ValidPaths WHERE path = ?1", [&p_y], |r| r.get(0))
+        .query_row("SELECT id FROM ValidPaths WHERE path = ?1", [&p_y], |r| {
+            r.get(0)
+        })
         .unwrap();
     let id_a: i64 = conn
-        .query_row("SELECT id FROM ValidPaths WHERE path = ?1", [&p_a], |r| r.get(0))
+        .query_row("SELECT id FROM ValidPaths WHERE path = ?1", [&p_a], |r| {
+            r.get(0)
+        })
         .unwrap();
     // Insert in reverse order to prove ORDER BY in our query, not insertion order.
     conn.execute(
@@ -327,7 +344,9 @@ fn references_are_emitted_in_lexicographic_order_in_narinfo() {
         .lines()
         .find(|l| l.starts_with("References: "))
         .expect("references line");
-    let names: Vec<&str> = refs_line["References: ".len()..].split_whitespace().collect();
+    let names: Vec<&str> = refs_line["References: ".len()..]
+        .split_whitespace()
+        .collect();
     assert_eq!(
         names,
         vec![
