@@ -139,6 +139,52 @@ nix copy --from http://127.0.0.1:5555 /nix/store/<hello-hash>-hello-*
 
 B should fetch the closure from A. Check logs on B for `mdns discovered peer` and on the daemon for incoming `Has` requests.
 
+## Inspecting daemon logs (who served what)
+
+The daemon emits one structured **JSON audit line per peer-served event** under the tracing target `nix_p2p_cache::audit`. Two events:
+
+- `narinfo_from_peer` — a peer answered the metadata lookup
+- `nar_pulled_from_peer` — a peer delivered the actual NAR bytes
+
+Each line includes the libp2p `peer_id`, the resolved `peer_host` (reverse-DNS lookup of the peer's first multiaddr), all known `peer_addrs`, the `hash_part`, the `store_path`, and (for NAR events) `bytes`:
+
+```json
+{"ts":1714838400,"event":"narinfo_from_peer","peer_id":"12D3KooW…","peer_host":"alice.local","peer_addrs":["/ip4/192.168.1.42/udp/5555/quic-v1"],"hash_part":"abc…","store_path":"/nix/store/abc…-hello-2.12"}
+{"ts":1714838401,"event":"nar_pulled_from_peer","peer_id":"12D3KooW…","peer_host":"alice.local","peer_addrs":["/ip4/192.168.1.42/udp/5555/quic-v1"],"hash_part":"abc…","store_path":"/nix/store/abc…-hello-2.12","bytes":204800}
+```
+
+`peer_host` is `null` if reverse DNS fails. To suppress non-audit noise, set `RUST_LOG=nix_p2p_cache::audit=info,warn`.
+
+### macOS (nix-darwin / launchd)
+
+```sh
+# live tail
+log stream --predicate 'process == "nix-p2p-cache"' --info \
+  | rg '"event":"' \
+  | jq .
+
+# last hour
+log show --predicate 'process == "nix-p2p-cache"' --info --last 1h \
+  | rg '"event":"nar_pulled_from_peer"' | jq .
+```
+
+If you set `StandardOutPath` / `StandardErrorPath` in the launchd plist, tail those files instead.
+
+### NixOS (systemd)
+
+```sh
+journalctl -u nix-p2p-cache -f \
+  | rg '"event":"' | jq .
+
+# only what got pulled in the last hour
+journalctl -u nix-p2p-cache --since '1 hour ago' \
+  | rg '"event":"nar_pulled_from_peer"' | jq .
+```
+
+### Manual / foreground
+
+The daemon writes to stderr via `tracing`. Set `RUST_LOG=info` (default) or `RUST_LOG=nix_p2p_cache=debug` for the mDNS-level events too.
+
 ## Development
 
 ```sh

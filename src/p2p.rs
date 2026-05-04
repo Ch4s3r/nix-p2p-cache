@@ -7,7 +7,7 @@ use libp2p::request_response::{
     cbor::codec::Codec as CborCodec,
 };
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{PeerId, StreamProtocol, mdns};
+use libp2p::{Multiaddr, PeerId, StreamProtocol, mdns};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,6 +31,10 @@ pub enum Command {
         peer: PeerId,
         hash_part: String,
         reply: oneshot::Sender<Option<Vec<u8>>>,
+    },
+    PeerAddrs {
+        peer: PeerId,
+        reply: oneshot::Sender<Vec<Multiaddr>>,
     },
 }
 
@@ -65,6 +69,19 @@ impl P2pHandle {
         self.find_inner(hash_part, false).await.into_iter().next()
     }
 
+    pub async fn peer_addrs(&self, peer: PeerId) -> Vec<Multiaddr> {
+        let (tx, rx) = oneshot::channel();
+        if self
+            .tx
+            .send(Command::PeerAddrs { peer, reply: tx })
+            .await
+            .is_err()
+        {
+            return Vec::new();
+        }
+        rx.await.unwrap_or_default()
+    }
+
     pub async fn fetch_nar(&self, peer: PeerId, hash_part: &str) -> Option<Vec<u8>> {
         let (tx, rx) = oneshot::channel();
         self.tx
@@ -82,10 +99,10 @@ impl P2pHandle {
         &self,
         peers: &[(PeerId, PathMeta)],
         hash_part: &str,
-    ) -> Option<Vec<u8>> {
+    ) -> Option<(PeerId, Vec<u8>)> {
         for (peer, _meta) in peers {
             if let Some(bytes) = self.fetch_nar(*peer, hash_part).await {
-                return Some(bytes);
+                return Some((*peer, bytes));
             }
             tracing::warn!(%peer, hash_part, "peer failed to deliver NAR; trying next");
         }
@@ -148,6 +165,7 @@ async fn run(store: Arc<LocalStore>, mut rx: mpsc::Receiver<Command>, port: u16)
     info!(port, "p2p listening");
 
     let mut peers: HashSet<PeerId> = HashSet::new();
+    let mut peer_addrs: HashMap<PeerId, HashSet<Multiaddr>> = HashMap::new();
     let mut pending_has: HashMap<request_response::OutboundRequestId, String> = HashMap::new();
     let mut pending_has_state: HashMap<String, PendingHas> = HashMap::new();
     let mut pending_nar: HashMap<request_response::OutboundRequestId, PendingNar> = HashMap::new();
@@ -177,6 +195,10 @@ async fn run(store: Arc<LocalStore>, mut rx: mpsc::Receiver<Command>, port: u16)
                             reply: Some(reply),
                         });
                     }
+                    Command::PeerAddrs { peer, reply } => {
+                        let addrs = peer_addrs.get(&peer).map(|s| s.iter().cloned().collect()).unwrap_or_default();
+                        let _ = reply.send(addrs);
+                    }
                     Command::FetchNar { peer, hash_part, reply } => {
                         let req = PeerRequest::GetNar { hash_part };
                         let id = swarm.behaviour_mut().rr.send_request(&peer, req);
@@ -191,10 +213,11 @@ async fn run(store: Arc<LocalStore>, mut rx: mpsc::Receiver<Command>, port: u16)
                             debug!(%peer, %addr, "mdns discovered peer");
                             swarm.add_peer_address(peer, addr.clone());
                             peers.insert(peer);
+                            peer_addrs.entry(peer).or_default().insert(addr);
                         }
                     }
                     SwarmEvent::Behaviour(CacheBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
-                        for (peer, _) in list { peers.remove(&peer); }
+                        for (peer, _) in list { peers.remove(&peer); peer_addrs.remove(&peer); }
                     }
                     SwarmEvent::Behaviour(CacheBehaviourEvent::Rr(request_response::Event::Message { peer, message, .. })) => {
                         match message {

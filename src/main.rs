@@ -1,3 +1,4 @@
+mod audit;
 mod http;
 mod keys;
 mod narinfo;

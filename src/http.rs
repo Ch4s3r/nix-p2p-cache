@@ -12,7 +12,7 @@ use axum::routing::get;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::info;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -63,7 +63,17 @@ async fn get_narinfo(State(state): State<AppState>, Path(file): Path<String>) ->
         Ok(None) => {
             // Cache miss locally — query peers.
             if let Some((peer, meta)) = state.p2p.find_path(&hash_part).await {
-                debug!(%peer, hash_part, "found path on peer");
+                let addrs = state.p2p.peer_addrs(peer).await;
+                let (host, addr_strs) = crate::audit::resolve_hostname(addrs).await;
+                crate::audit::emit(
+                    "narinfo_from_peer",
+                    peer,
+                    host,
+                    addr_strs,
+                    &hash_part,
+                    Some(&meta.store_path),
+                    None,
+                );
                 let nar_hash = match normalize_nar_hash_pub(&meta.nar_hash) {
                     Ok(v) => v,
                     Err(_) => return (StatusCode::BAD_GATEWAY, "bad peer narHash").into_response(),
@@ -137,11 +147,26 @@ async fn get_nar(State(state): State<AppState>, Path(file): Path<String>) -> Res
 
     let candidates = state.p2p.find_paths(&hash_part).await;
     if !candidates.is_empty() {
-        if let Some(bytes) = state
+        if let Some((peer, bytes)) = state
             .p2p
             .fetch_nar_with_failover(&candidates, &hash_part)
             .await
         {
+            let addrs = state.p2p.peer_addrs(peer).await;
+            let (host, addr_strs) = crate::audit::resolve_hostname(addrs).await;
+            let store_path = candidates
+                .iter()
+                .find(|(p, _)| *p == peer)
+                .map(|(_, m)| m.store_path.as_str());
+            crate::audit::emit(
+                "nar_pulled_from_peer",
+                peer,
+                host,
+                addr_strs,
+                &hash_part,
+                store_path,
+                Some(bytes.len()),
+            );
             return (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "application/x-nix-archive")],

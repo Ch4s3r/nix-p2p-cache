@@ -10,6 +10,7 @@ blake3 = "1"
 bytes = "1"
 clap = { version = "4", features = ["derive"] }
 data-encoding = "2"
+dns-lookup = "3.0.1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 futures = "0.3"
 hex = "0.4"
